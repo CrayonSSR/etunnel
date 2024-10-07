@@ -77,7 +77,7 @@ let proxyhostsURL = 'https://raw.githubusercontent.com/cmliu/CFcdnVmess2sub/main
 let RproxyIP = 'false';
 let httpsPorts = ["2053","2083","2087","2096","8443"];
 
-const $pIPState = { index: 0, fail: 0, maxFail: 4 }
+const $pIPState = { index: 0, fail: 0, maxFail: 5 }
 function updateProxyIP(isFail = true) {
 	$pIPState.fail++;
 	if (!isFail) { return $pIPState.fail = 0 }
@@ -439,6 +439,7 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 		}
 		// 无论重试是否成功，都要关闭 WebSocket（可能是为了重新建立连接）
 		tcpSocket.closed.catch(error => {
+			updateProxyIP(true)
 			console.log('retry tcpSocket closed error', error);
 		}).finally(() => {
 			safeCloseWebSocket(webSocket);
@@ -765,13 +766,14 @@ async function remoteSocketToWS(remoteSocket, webSocket, vlessResponseHeader, re
 			safeCloseWebSocket(webSocket);
 		});
 
+	// retry不存在，表示本次为proxyIP的请求
+	if (!retry) { return hasIncomingData ? updateProxyIP(false) : updateProxyIP(true) }
+
 	// 处理 Cloudflare 连接 Socket 的特殊错误情况
 	// 1. Socket.closed 将有错误
 	// 2. Socket.readable 将关闭，但没有任何数据
-	if (hasIncomingData) { return updateProxyIP(false) }
-	if (retry) {
+	if (!hasIncomingData && retry) {
 		log(`retry`);
-		updateProxyIP(true)
 		retry(); // 调用重试函数，尝试重新建立连接
 	}
 }
