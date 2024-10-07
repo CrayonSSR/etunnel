@@ -37,7 +37,6 @@ let go2Socks5s = [
 let addresses = [
 	//当sub为空时启用本地优选域名/优选IP，若不带端口号 TLS默认端口为443，#号后为备注别名
 	/*
-	'Join.my.Telegram.channel.CMLiussss.to.unlock.more.premium.nodes.cf.090227.xyz#加入我的频道t.me/CMLiussss解锁更多优选节点',
 	'visa.cn:443',
 	'www.visa.com:8443',
 	'cis.visa.com:2053',
@@ -77,6 +76,18 @@ let proxyhosts = [];//本地代理域名池
 let proxyhostsURL = 'https://raw.githubusercontent.com/cmliu/CFcdnVmess2sub/main/proxyhosts';//在线代理域名池URL
 let RproxyIP = 'false';
 let httpsPorts = ["2053","2083","2087","2096","8443"];
+
+const $pIPState = { index: 0, fail: 0, maxFail: 4 }
+function updateProxyIP(isFail = true) {
+	$pIPState.fail++;
+	if (!isFail) { return $pIPState.fail = 0 }
+	if ($pIPState.fail > $pIPState.maxFail) {
+		$pIPState.index = ($pIPState.index + 1) % proxyIPs.length
+		proxyIP = proxyIPs[$pIPState.index]
+		return $pIPState.fail = 0
+	}
+}
+
 export default {
 	/**
 	 * @param {import("@cloudflare/workers-types").Request} request
@@ -88,6 +99,7 @@ export default {
 		try {
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
+			const url = new URL(request.url);
 			userID = (env.UUID || userID).toLowerCase();
 
 			const currentDate = new Date();
@@ -97,17 +109,16 @@ export default {
 			fakeUserID = fakeUserIDMD5.slice(0, 8) + "-" + fakeUserIDMD5.slice(8, 12) + "-" + fakeUserIDMD5.slice(12, 16) + "-" + fakeUserIDMD5.slice(16, 20) + "-" + fakeUserIDMD5.slice(20);
 			fakeHostName = fakeUserIDMD5.slice(6, 9) + "." + fakeUserIDMD5.slice(13, 19);
 			//console.log(`虚假UUID: ${fakeUserID}`); // 打印fakeID
-
-			proxyIP = env.PROXYIP || proxyIP;
-			proxyIPs = await ADD(proxyIP);
-			proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
+			proxyIPs = await ADD(env.PROXYIP || proxyIP);
+			proxyIP = proxyIPs[$pIPState.index];
 			//console.log(proxyIP);
 			socks5Address = env.SOCKS5 || socks5Address;
 			socks5s = await ADD(socks5Address);
 			socks5Address = socks5s[Math.floor(Math.random() * socks5s.length)];
 			socks5Address = socks5Address.split('//')[1] || socks5Address;
 			if (env.CFPORTS) httpsPorts = await ADD(env.CFPORTS);
-			sub = env.SUB || sub;
+			sub = url.searchParams.get('sub') || env.SUB || sub;
+			FileName = url.searchParams.get('$sn') || env.SUBNAME || FileName;
 			subconverter = env.SUBAPI || subconverter;
 			if( subconverter.includes("http://") ){
 				subconverter = subconverter.split("//")[1];
@@ -141,9 +152,6 @@ export default {
 			ChatID = env.TGID || ChatID; 
 			if(env.GO2SOCKS5) go2Socks5s = await ADD(env.GO2SOCKS5);
 			const upgradeHeader = request.headers.get('Upgrade');
-			const url = new URL(request.url);
-			if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub');
-			FileName = env.SUBNAME || FileName;
 			if (url.searchParams.has('notls')) noTLS = 'true';
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
 				// const url = new URL(request.url);
@@ -760,8 +768,10 @@ async function remoteSocketToWS(remoteSocket, webSocket, vlessResponseHeader, re
 	// 处理 Cloudflare 连接 Socket 的特殊错误情况
 	// 1. Socket.closed 将有错误
 	// 2. Socket.readable 将关闭，但没有任何数据
-	if (hasIncomingData === false && retry) {
+	if (hasIncomingData) { return updateProxyIP(false) }
+	if (retry) {
 		log(`retry`);
+		updateProxyIP(true)
 		retry(); // 调用重试函数，尝试重新建立连接
 	}
 }
