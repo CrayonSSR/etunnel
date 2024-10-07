@@ -37,7 +37,6 @@ let go2Socks5s = [
 let addresses = [
 	//当sub为空时启用本地优选域名/优选IP，若不带端口号 TLS默认端口为443，#号后为备注别名
 	/*
-	'Join.my.Telegram.channel.CMLiussss.to.unlock.more.premium.nodes.cf.090227.xyz#加入我的频道t.me/CMLiussss解锁更多优选节点',
 	'visa.cn:443',
 	'www.visa.com:8443',
 	'cis.visa.com:2053',
@@ -77,6 +76,59 @@ let proxyhosts = [];//本地代理域名池
 let proxyhostsURL = 'https://raw.githubusercontent.com/cmliu/CFcdnVmess2sub/main/proxyhosts';//在线代理域名池URL
 let RproxyIP = 'false';
 let httpsPorts = ["2053","2083","2087","2096","8443"];
+
+function readConfig(reqArgs, handler) {
+	let value;
+
+	if (reqArgs.length <= 3) {
+		const [arg, argParam, type='url'] = reqArgs
+		value = type === 'url' 
+			? arg && arg.searchParams.get(argParam)
+			: arg && arg[argParam]
+	} else {
+		const [env, eName, url, uName] = reqArgs
+		value = (url && url.searchParams.get(uName)) || (env && env[eName]);
+	}
+
+	return value && handler(value.trim())
+}
+
+
+async function initSubConfig(env, url) {
+	const currentDate = new Date();
+	currentDate.setHours(0, 0, 0, 0); 
+	const timestamp = Math.ceil(currentDate.getTime() / 1000);
+	const fakeUserIDMD5 = await MD5MD5(`${userID}${timestamp}`);
+	fakeUserID = fakeUserIDMD5.slice(0, 8) + "-" + fakeUserIDMD5.slice(8, 12) + "-" + fakeUserIDMD5.slice(12, 16) + "-" + fakeUserIDMD5.slice(16, 20) + "-" + fakeUserIDMD5.slice(20);
+	fakeHostName = fakeUserIDMD5.slice(6, 9) + "." + fakeUserIDMD5.slice(13, 19);
+	//console.log(`虚假UUID: ${fakeUserID}`); // 打印fakeID
+
+	if (env.CFPORTS) httpsPorts = ADD(env.CFPORTS);
+	readConfig([env, 'SUBNAME', url, '$sn'], v => FileName = v)
+	readConfig([env, 'SUB', url, 'sub'], v => sub = v)
+
+	subconverter = env.SUBAPI || subconverter;
+	if(subconverter.includes("http://") ){
+		subconverter = subconverter.split("//")[1];
+		subProtocol = 'http';
+	} else {
+		subconverter = subconverter.split("//")[1] || subconverter;
+	}
+	subconfig = env.SUBCONFIG || subconfig;
+
+	const AD_SPLIT_RULE = /[\r\n,，]+/i
+	readConfig([env, 'ADD', url, '$ad'], v => addresses = v.split(AD_SPLIT_RULE))
+	readConfig([env, 'ADDAPI', url, '$ada'], v => addressesapi = v.split(AD_SPLIT_RULE))
+	if (env.ADDNOTLS) addressesnotls = ADD(env.ADDNOTLS);
+	if (env.ADDNOTLSAPI) addressesnotlsapi = ADD(env.ADDNOTLSAPI);
+	if (env.ADDCSV) addressescsv = ADD(env.ADDCSV);
+	if (url.searchParams.has('notls')) noTLS = 'true';
+
+	DLS = env.DLS || DLS;
+	BotToken = env.TGTOKEN || BotToken;
+	ChatID = env.TGID || ChatID; 
+}
+
 export default {
 	/**
 	 * @param {import("@cloudflare/workers-types").Request} request
@@ -88,35 +140,22 @@ export default {
 		try {
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
+			const url = new URL(request.url);
 			userID = (env.UUID || userID).toLowerCase();
 
-			const currentDate = new Date();
-			currentDate.setHours(0, 0, 0, 0); 
-			const timestamp = Math.ceil(currentDate.getTime() / 1000);
-			const fakeUserIDMD5 = await MD5MD5(`${userID}${timestamp}`);
-			fakeUserID = fakeUserIDMD5.slice(0, 8) + "-" + fakeUserIDMD5.slice(8, 12) + "-" + fakeUserIDMD5.slice(12, 16) + "-" + fakeUserIDMD5.slice(16, 20) + "-" + fakeUserIDMD5.slice(20);
-			fakeHostName = fakeUserIDMD5.slice(6, 9) + "." + fakeUserIDMD5.slice(13, 19);
-			//console.log(`虚假UUID: ${fakeUserID}`); // 打印fakeID
+			proxyIPs = ADD(env.PROXYIP || proxyIP);
+			proxyIP = proxyIPs[0];
+			if (env.$RD_PIP && proxyIPs.length > 1) {
+				proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)]
+			}
 
-			proxyIP = env.PROXYIP || proxyIP;
-			proxyIPs = await ADD(proxyIP);
-			proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
 			//console.log(proxyIP);
 			socks5Address = env.SOCKS5 || socks5Address;
-			socks5s = await ADD(socks5Address);
-			socks5Address = socks5s[Math.floor(Math.random() * socks5s.length)];
-			socks5Address = socks5Address.split('//')[1] || socks5Address;
-			if (env.CFPORTS) httpsPorts = await ADD(env.CFPORTS);
-			sub = env.SUB || sub;
-			subconverter = env.SUBAPI || subconverter;
-			if( subconverter.includes("http://") ){
-				subconverter = subconverter.split("//")[1];
-				subProtocol = 'http';
-			} else {
-				subconverter = subconverter.split("//")[1] || subconverter;
-			}
-			subconfig = env.SUBCONFIG || subconfig;
 			if (socks5Address) {
+				socks5s = ADD(socks5Address);
+				socks5Address = socks5s[Math.floor(Math.random() * socks5s.length)];
+				socks5Address = socks5Address.split('//')[1] || socks5Address;
+
 				try {
 					parsedSocks5Address = socks5AddressParser(socks5Address);
 					RproxyIP = env.RPROXYIP || 'false';
@@ -131,21 +170,13 @@ export default {
 			} else {
 				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 			}
-			if (env.ADD) addresses = await ADD(env.ADD);
-			if (env.ADDAPI) addressesapi = await ADD(env.ADDAPI);
-			if (env.ADDNOTLS) addressesnotls = await ADD(env.ADDNOTLS);
-			if (env.ADDNOTLSAPI) addressesnotlsapi = await ADD(env.ADDNOTLSAPI);
-			if (env.ADDCSV) addressescsv = await ADD(env.ADDCSV);
-			DLS = env.DLS || DLS;
-			BotToken = env.TGTOKEN || BotToken;
-			ChatID = env.TGID || ChatID; 
-			if(env.GO2SOCKS5) go2Socks5s = await ADD(env.GO2SOCKS5);
+
+			if(env.GO2SOCKS5) go2Socks5s = ADD(env.GO2SOCKS5);
+
 			const upgradeHeader = request.headers.get('Upgrade');
-			const url = new URL(request.url);
-			if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub');
-			FileName = env.SUBNAME || FileName;
-			if (url.searchParams.has('notls')) noTLS = 'true';
 			if (!upgradeHeader || upgradeHeader !== 'websocket') {
+				await initSubConfig(env, url);
+
 				// const url = new URL(request.url);
 				switch (url.pathname.toLowerCase()) {
 				case '/':
@@ -1192,7 +1223,7 @@ async function MD5MD5(text) {
  * @param {string} envadd 包含地址列表的环境变量值
  * @returns {Promise<string[]>} 清理和分割后的地址数组
  */
-async function ADD(envadd) {
+function ADD(envadd) {
 	// 将制表符、双引号、单引号和换行符都替换为逗号
 	// 然后将连续的多个逗号替换为单个逗号
 	var addtext = envadd.replace(/[	|"'\r\n]+/g, ',').replace(/,+/g, ',');
@@ -1208,7 +1239,7 @@ async function ADD(envadd) {
 }
 
 async function proxyURL(proxyURL, url) {
-	const URLs = await ADD(proxyURL);
+	const URLs = ADD(proxyURL);
 	const fullURL = URLs[Math.floor(Math.random() * URLs.length)];
 
 	// 解析目标 URL
@@ -1506,10 +1537,10 @@ https://github.com/cmliu/edgetunnel
 
 		if (!userAgent.includes(('CF-Workers-SUB').toLowerCase())){
 			if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || ( _url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
-				url = `${subProtocol}://${subconverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subconfig)}&emoji=true&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+				url = `${subProtocol}://${subconverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subconfig)}&emoji=true&list=true&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
 			} else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || (( _url.searchParams.has('singbox') || _url.searchParams.has('sb')) && !userAgent.includes('subconverter'))) {
-				url = `${subProtocol}://${subconverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subconfig)}&emoji=true&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
+				url = `${subProtocol}://${subconverter}/sub?target=singbox&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subconfig)}&emoji=true&list=true&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
 			}
 		}
@@ -1651,7 +1682,7 @@ async function getAddressesapi(api) {
 				// 验证当前apiUrl是否带有'proxyip=true'
 				if (api[index].includes('proxyip=true')) {
 					// 如果URL带有'proxyip=true'，则将内容添加到proxyIPPool
-					proxyIPPool = proxyIPPool.concat((await ADD(content)).map(item => {
+					proxyIPPool = proxyIPPool.concat((ADD(content)).map(item => {
 						const baseItem = item.split('#')[0] || item;
 						if (baseItem.includes(':')) {
 							const port = baseItem.split(':')[1];
@@ -1675,7 +1706,7 @@ async function getAddressesapi(api) {
 		clearTimeout(timeout);
 	}
 
-	const newAddressesapi = await ADD(newapi);
+	const newAddressesapi = ADD(newapi);
 
 	// 返回处理后的结果
 	return newAddressesapi;
