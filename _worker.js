@@ -88,6 +88,11 @@ function updateProxyIP(isFail = true) {
 	}
 }
 
+function readConfig(envArgName, [url, argName], handler) {
+	let value = url && url.searchParams.get(urlName) || env[envArgName];
+	return value && handler(value.trim())
+}
+
 export default {
 	/**
 	 * @param {import("@cloudflare/workers-types").Request} request
@@ -116,9 +121,10 @@ export default {
 			socks5s = await ADD(socks5Address);
 			socks5Address = socks5s[Math.floor(Math.random() * socks5s.length)];
 			socks5Address = socks5Address.split('//')[1] || socks5Address;
+
 			if (env.CFPORTS) httpsPorts = await ADD(env.CFPORTS);
-			sub = url.searchParams.get('sub') || env.SUB || sub;
-			FileName = url.searchParams.get('$sn') || env.SUBNAME || FileName;
+			readConfig('SUBNAME', [url, '$sn'], v => FileName = v)
+			readConfig('SUB', [url, 'sub'], v => sub = v)
 			subconverter = env.SUBAPI || subconverter;
 			if( subconverter.includes("http://") ){
 				subconverter = subconverter.split("//")[1];
@@ -142,8 +148,9 @@ export default {
 			} else {
 				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 			}
-			if (env.ADD) addresses = await ADD(env.ADD);
-			if (env.ADDAPI) addressesapi = await ADD(env.ADDAPI);
+			const AD_SPLIT_RULE = /[\r\n,，]+/i
+			readConfig('ADD', [url, '$ad'], v => addresses = v.split(AD_SPLIT_RULE))
+			readConfig('ADDAPI', [url, '$ada'], v => addressesapi = v.split(AD_SPLIT_RULE))
 			if (env.ADDNOTLS) addressesnotls = await ADD(env.ADDNOTLS);
 			if (env.ADDNOTLSAPI) addressesnotlsapi = await ADD(env.ADDNOTLSAPI);
 			if (env.ADDCSV) addressescsv = await ADD(env.ADDCSV);
@@ -439,7 +446,6 @@ async function handleTCPOutBound(remoteSocket, addressType, addressRemote, portR
 		}
 		// 无论重试是否成功，都要关闭 WebSocket（可能是为了重新建立连接）
 		tcpSocket.closed.catch(error => {
-			updateProxyIP(true)
 			console.log('retry tcpSocket closed error', error);
 		}).finally(() => {
 			safeCloseWebSocket(webSocket);
