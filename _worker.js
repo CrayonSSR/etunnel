@@ -88,8 +88,8 @@ function updateProxyIP(isFail = true) {
 	}
 }
 
-function readConfig(envArgName, [url, argName], handler) {
-	let value = url && url.searchParams.get(urlName) || env[envArgName];
+function readConfig([env, eName, url, uName], handler) {
+	let value = url && url.searchParams.get(uName) || env[eName];
 	return value && handler(value.trim())
 }
 
@@ -123,8 +123,8 @@ export default {
 			socks5Address = socks5Address.split('//')[1] || socks5Address;
 
 			if (env.CFPORTS) httpsPorts = await ADD(env.CFPORTS);
-			readConfig('SUBNAME', [url, '$sn'], v => FileName = v)
-			readConfig('SUB', [url, 'sub'], v => sub = v)
+			readConfig([env, 'SUBNAME', url, '$sn'], v => FileName = v)
+			readConfig([env, 'SUB', url, 'sub'], v => sub = v)
 			subconverter = env.SUBAPI || subconverter;
 			if( subconverter.includes("http://") ){
 				subconverter = subconverter.split("//")[1];
@@ -149,8 +149,8 @@ export default {
 				RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
 			}
 			const AD_SPLIT_RULE = /[\r\n,，]+/i
-			readConfig('ADD', [url, '$ad'], v => addresses = v.split(AD_SPLIT_RULE))
-			readConfig('ADDAPI', [url, '$ada'], v => addressesapi = v.split(AD_SPLIT_RULE))
+			readConfig([env, 'ADD', url, '$ad'], v => addresses = v.split(AD_SPLIT_RULE))
+			readConfig([env, 'ADDAPI', url, '$ada'], v => addressesapi = v.split(AD_SPLIT_RULE))
 			if (env.ADDNOTLS) addressesnotls = await ADD(env.ADDNOTLS);
 			if (env.ADDNOTLSAPI) addressesnotlsapi = await ADD(env.ADDNOTLSAPI);
 			if (env.ADDCSV) addressescsv = await ADD(env.ADDCSV);
